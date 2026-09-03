@@ -65,7 +65,26 @@
   保留 hash 才能讓「加到主畫面」記住的網址每次啟動都帶著設定。
 */
 var KEY = 'couple_app_host_url';
-var VALID = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec/;
+var EXEC_RE = /https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec[^\s"'<>&]*/;
+var VALID = function(u){ return !!u && EXEC_RE.test(u); };
+
+// 使用者最自然會貼的就是「收到的那整串連結」，所以三種都要吃：
+//   1. 外框頁網址（含 #u=… 或 ?u=…，值是 URL-encoded 的）
+//   2. 純粹的 /exec 網址
+//   3. 夾在一整段文字裡的 /exec 網址
+function extractExec(raw){
+  var v = (raw || '').trim();
+  if(!v) return '';
+  var m = v.match(/[#&?]u=([^&\s]+)/);
+  if(m){
+    var dec = '';
+    try{ dec = decodeURIComponent(m[1]); }catch(e){ dec = m[1]; }
+    var hit = dec.match(EXEC_RE);
+    if(hit) return hit[0];
+  }
+  var direct = v.match(EXEC_RE);
+  return direct ? direct[0] : '';
+}
 
 function fromHash(){
   if(location.hash.length < 2) return '';
@@ -100,26 +119,27 @@ function showSetup(){
   d.id = 'setup';
   d.innerHTML =
     '<h1>先設定一次</h1>' +
-    '<p>把 Apps Script 的網址貼進來，之後這台裝置就不用再設定了。</p>' +
+    '<p>把收到的連結整串貼進來就好，之後這台裝置就不用再設定了。</p>' +
     '<input id="u" type="url" inputmode="url" autocapitalize="off" autocorrect="off" ' +
-    'placeholder="https://script.google.com/macros/s/…/exec">' +
+    'placeholder="把收到的連結整串貼進來">' +
     '<button id="go">開始使用</button>' +
     '<div id="err"></div>' +
     '<small>從主畫面圖示開啟的話，iPhone 會給它一個和 Safari 分開的儲存空間，' +
     '所以可能需要在這裡再貼一次。貼過就會記住。</small>';
   document.body.appendChild(d);
   document.getElementById('go').onclick = function(){
-    var v = document.getElementById('u').value.trim();
-    if(!VALID.test(v)){
-      document.getElementById('err').textContent = '網址看起來不對，要是 /exec 結尾的那串。';
+    var v = extractExec(document.getElementById('u').value);
+    if(!v){
+      document.getElementById('err').textContent =
+        '這串裡面找不到 Apps Script 網址，請確認有複製完整。';
       return;
     }
     boot(v);
   };
 }
 
-var u = fromHash() || recall();
-if(VALID.test(u)) boot(u); else showSetup();
+var u = extractExec(fromHash()) || extractExec(recall());
+if(u) boot(u); else showSetup();
 </script>
 </body>
 </html>
