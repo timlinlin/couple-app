@@ -18,71 +18,108 @@
     padding-bottom:env(safe-area-inset-bottom,0px);
   }
   iframe{border:0;width:100%;height:100%;display:block;background:#0b090d}
-  #msg{
-    color:#9d92a4;text-align:center;padding:64px 26px;
-    font:15px/1.8 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;
+  #setup{
+    box-sizing:border-box;height:100%;overflow-y:auto;
+    padding:56px 22px;color:#9d92a4;
+    font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;
   }
-  #msg b{display:block;color:#f4ecf3;font-size:17px;margin-bottom:10px}
-  #msg code{
-    display:block;word-break:break-all;margin-top:14px;padding:12px 14px;
-    background:#17131c;border:1px solid rgba(255,255,255,.1);border-radius:12px;
-    color:#ff6f91;font-size:12px;text-align:left;
+  #setup h1{color:#f4ecf3;font-size:20px;margin:0 0 10px;text-align:center}
+  #setup p{margin:0 0 18px;text-align:center}
+  #setup input{
+    box-sizing:border-box;width:100%;padding:13px 14px;font-size:16px;
+    border:1px solid rgba(255,255,255,.13);border-radius:14px;
+    background:#1e1925;color:#f4ecf3;font-family:inherit;
   }
+  #setup input:focus{outline:none;border-color:rgba(255,111,145,.55)}
+  #setup button{
+    width:100%;margin-top:12px;padding:14px;border:0;border-radius:14px;
+    background:linear-gradient(135deg,#ff6f91,#c78bff);color:#fff;
+    font:700 15px/1 inherit;font-family:inherit;cursor:pointer;
+  }
+  #setup small{display:block;margin-top:18px;font-size:12.5px;line-height:1.8;color:#6b6273}
+  #err{color:#ff7a7a;margin-top:12px;text-align:center;min-height:20px;font-size:13px}
   .dot{
-    width:9px;height:9px;border-radius:50%;margin:0 auto 18px;
+    width:9px;height:9px;border-radius:50%;margin:0 auto 20px;
     background:linear-gradient(135deg,#ff6f91,#c78bff);
     box-shadow:0 0 14px rgba(255,111,145,.7);
     animation:pulse 1.4s infinite ease-in-out;
   }
   @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.5}}
+  #loading{padding:70px 20px;text-align:center;color:#9d92a4;
+    font:15px -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif}
 </style>
 </head>
 <body>
-<div id="msg"><div class="dot"></div>載入中…</div>
+<div id="loading"><div class="dot"></div>載入中…</div>
 <script>
 /*
-  外框頁。
-  真正的 App 由 Apps Script 發出，這裡只是用 iframe 把它包起來，目的有二：
-   1. Google 那條「這個應用程式是由 Apps Script 的使用者建立」公告只會出現在
-      最上層頁面，被 iframe 嵌入時不會出現。
-   2. App 在 iframe 裡走的是 google.script.run，完全不需要跨網域 fetch，
-      也就不會踩到 CORS / 401 的問題。
-  Apps Script 網址由 #u= 帶入後存在本機，不寫死在這個公開的原始碼裡。
+  外框頁。真正的 App 由 Apps Script 發出，這裡用 iframe 把它包起來，目的有二：
+   1. Google 那條「本應用程式由 Apps Script 使用者建立」公告只出現在最上層頁面，
+      被 iframe 嵌入時不會出現。
+   2. App 在 iframe 裡走 google.script.run，完全不需要跨網域 fetch，
+      也就不會踩到 CORS / 401 / 403。
+  Apps Script 網址由 #u= 帶入，不寫死在這個公開的原始碼裡。
+
+  注意：這裡「不會」把 #u= 從網址清掉。
+  iOS 從主畫面開啟的 Web App 有獨立的儲存空間，讀不到 Safari 存的東西；
+  保留 hash 才能讓「加到主畫面」記住的網址每次啟動都帶著設定。
 */
 var KEY = 'couple_app_host_url';
+var VALID = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec/;
 
-function readUrl(){
+function fromHash(){
+  if(location.hash.length < 2) return '';
   var q = {};
-  if(location.hash.length > 1){
-    location.hash.slice(1).split('&').forEach(function(kv){
-      var i = kv.indexOf('=');
-      if(i > 0) q[kv.slice(0,i)] = decodeURIComponent(kv.slice(i+1).replace(/\+/g,' '));
-    });
-  }
-  if(q.u && /^https:\/\/script\.google\.com\//.test(q.u)){
-    try{ localStorage.setItem(KEY, q.u); }catch(e){}
-    try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
-    return q.u;
-  }
-  try{ return localStorage.getItem(KEY) || ''; }catch(e){ return ''; }
+  location.hash.slice(1).split('&').forEach(function(kv){
+    var i = kv.indexOf('=');
+    if(i > 0) q[kv.slice(0,i)] = decodeURIComponent(kv.slice(i+1).replace(/\+/g,' '));
+  });
+  return q.u || '';
 }
+function remember(u){ try{ localStorage.setItem(KEY, u); }catch(e){} }
+function recall(){ try{ return localStorage.getItem(KEY) || ''; }catch(e){ return ''; } }
 
-var url = readUrl();
-var msg = document.getElementById('msg');
-
-if(!url){
-  msg.innerHTML = '<b>還沒設定</b>第一次開啟請用結尾帶 <code>#u=…</code> 的完整網址，' +
-                  '設定會存在這台裝置，之後開這個短網址就可以了。';
-}else{
+function boot(u){
+  remember(u);
   var f = document.createElement('iframe');
-  f.src = url;
+  f.src = u;
   f.allow = 'geolocation';
-  f.onload = function(){ if(msg && msg.parentNode) msg.parentNode.removeChild(msg); };
-  f.onerror = function(){
-    msg.innerHTML = '<b>載入失敗</b>打不開 Apps Script 網址，請確認它還有效。';
+  f.onload = function(){
+    var l = document.getElementById('loading');
+    if(l && l.parentNode) l.parentNode.removeChild(l);
+    var s = document.getElementById('setup');
+    if(s && s.parentNode) s.parentNode.removeChild(s);
   };
   document.body.appendChild(f);
 }
+
+function showSetup(){
+  var l = document.getElementById('loading');
+  if(l && l.parentNode) l.parentNode.removeChild(l);
+  var d = document.createElement('div');
+  d.id = 'setup';
+  d.innerHTML =
+    '<h1>先設定一次</h1>' +
+    '<p>把 Apps Script 的網址貼進來，之後這台裝置就不用再設定了。</p>' +
+    '<input id="u" type="url" inputmode="url" autocapitalize="off" autocorrect="off" ' +
+    'placeholder="https://script.google.com/macros/s/…/exec">' +
+    '<button id="go">開始使用</button>' +
+    '<div id="err"></div>' +
+    '<small>從主畫面圖示開啟的話，iPhone 會給它一個和 Safari 分開的儲存空間，' +
+    '所以可能需要在這裡再貼一次。貼過就會記住。</small>';
+  document.body.appendChild(d);
+  document.getElementById('go').onclick = function(){
+    var v = document.getElementById('u').value.trim();
+    if(!VALID.test(v)){
+      document.getElementById('err').textContent = '網址看起來不對，要是 /exec 結尾的那串。';
+      return;
+    }
+    boot(v);
+  };
+}
+
+var u = fromHash() || recall();
+if(VALID.test(u)) boot(u); else showSetup();
 </script>
 </body>
 </html>
