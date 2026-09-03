@@ -998,6 +998,15 @@ function setStat(el, v){
 }
 
 /* ================= 啟動 ================= */
+// 由 GAS 的 doGet 注入。App 在巢狀 iframe 裡讀不到裝置安全區，
+// 外框頁量好後透過網址參數傳給後端，後端再注入成這個全域變數。
+(function(){
+  var si = window.__safeInsets;
+  if(!si) return;
+  if(si.t > 0) document.documentElement.style.setProperty('--safe-t', si.t + 'px');
+  if(si.b > 0) document.documentElement.style.setProperty('--safe-b', si.b + 'px');
+})();
+
 (function(){
   if(!location.hash || location.hash.length < 2) return;
   var q = {};
@@ -1006,8 +1015,8 @@ function setStat(el, v){
     if(i > 0) q[kv.slice(0,i)] = decodeURIComponent(kv.slice(i+1).replace(/\+/g,' '));
   });
 
-  // 被外框頁用 iframe 包起來時，這裡讀不到 env(safe-area-inset-*)（永遠是 0），
-  // 所以改由外框頁量好再用 #st= / #sb= 傳進來，避免導覽列壓到 home indicator。
+  // 直接開檔（非 GAS）時也允許用 #st= / #sb= 覆寫安全區，方便測試。
+  // 正式在 GAS 上跑時是由 doGet 注入 window.__safeInsets，見下方。
   if(q.st) document.documentElement.style.setProperty('--safe-t', parseInt(q.st, 10) + 'px');
   if(q.sb) document.documentElement.style.setProperty('--safe-b', parseInt(q.sb, 10) + 'px');
 

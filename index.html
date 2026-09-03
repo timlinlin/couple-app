@@ -111,7 +111,9 @@ function boot(u){
   remember(u);
   var ins = safeInsets();
   var f = document.createElement('iframe');
-  f.src = u + (u.indexOf('#') >= 0 ? '&' : '#') + 'st=' + ins.t + '&sb=' + ins.b;
+  // 用查詢參數而非 hash：GAS 會再開一層內部 iframe 跑 App，hash 傳不進去，
+  // 查詢參數則會進到 doGet(e).parameter，由後端注入頁面。
+  f.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + 'st=' + ins.t + '&sb=' + ins.b;
   f.allow = 'geolocation';
   f.onload = function(){
     var l = document.getElementById('loading');
