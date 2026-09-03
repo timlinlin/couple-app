@@ -10,13 +10,6 @@
 <title>我們的小天地</title>
 <style>
   html,body{margin:0;height:100%;background:#0b090d;overflow:hidden}
-  /* iframe 內部讀不到 env(safe-area-inset-*)，所以由外框頁把安全區讓出來，
-     裡面的底部導覽列才不會壓到 iPhone 的 home indicator */
-  body{
-    box-sizing:border-box;
-    padding-top:env(safe-area-inset-top,0px);
-    padding-bottom:env(safe-area-inset-bottom,0px);
-  }
   iframe{border:0;width:100%;height:100%;display:block;background:#0b090d}
   #setup{
     box-sizing:border-box;height:100%;overflow-y:auto;
@@ -98,10 +91,27 @@ function fromHash(){
 function remember(u){ try{ localStorage.setItem(KEY, u); }catch(e){} }
 function recall(){ try{ return localStorage.getItem(KEY) || ''; }catch(e){ return ''; } }
 
+// iframe 內部讀不到 env(safe-area-inset-*)（永遠是 0），但 iframe 又必須鋪滿整個
+// 畫面才不會出現上下黑邊。所以在外框頁量出實際數值，用網址參數傳進去給 App 套用。
+function safeInsets(){
+  var probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;' +
+    'padding-top:env(safe-area-inset-top,0px);' +
+    'padding-bottom:env(safe-area-inset-bottom,0px);';
+  document.body.appendChild(probe);
+  var cs = getComputedStyle(probe);
+  var t = Math.round(parseFloat(cs.paddingTop) || 0);
+  var b = Math.round(parseFloat(cs.paddingBottom) || 0);
+  probe.parentNode.removeChild(probe);
+  return { t: t, b: b };
+}
+
 function boot(u){
   remember(u);
+  var ins = safeInsets();
   var f = document.createElement('iframe');
-  f.src = u;
+  f.src = u + (u.indexOf('#') >= 0 ? '&' : '#') + 'st=' + ins.t + '&sb=' + ins.b;
   f.allow = 'geolocation';
   f.onload = function(){
     var l = document.getElementById('loading');

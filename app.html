@@ -998,8 +998,6 @@ function setStat(el, v){
 }
 
 /* ================= 啟動 ================= */
-// 網址若帶 #u=<exec網址>&p=<密碼>，第一次開啟就自動吃設定，然後把網址列清乾淨。
-// 這樣同步設定不必寫死在公開的原始碼裡，兩支手機也不用各自手打。
 (function(){
   if(!location.hash || location.hash.length < 2) return;
   var q = {};
@@ -1007,12 +1005,19 @@ function setStat(el, v){
     var i = kv.indexOf('=');
     if(i > 0) q[kv.slice(0,i)] = decodeURIComponent(kv.slice(i+1).replace(/\+/g,' '));
   });
+
+  // 被外框頁用 iframe 包起來時，這裡讀不到 env(safe-area-inset-*)（永遠是 0），
+  // 所以改由外框頁量好再用 #st= / #sb= 傳進來，避免導覽列壓到 home indicator。
+  if(q.st) document.documentElement.style.setProperty('--safe-t', parseInt(q.st, 10) + 'px');
+  if(q.sb) document.documentElement.style.setProperty('--safe-b', parseInt(q.sb, 10) + 'px');
+
+  // 直接開啟（非 iframe）時，同步設定可以用 #u= / #p= 帶進來，
+  // 這樣就不必把網址和密碼寫死在公開的原始碼裡。
   if(!q.u) return;
   S.sync.url = q.u;
   S.sync.pass = q.p || '';
   S.sync.seq = 0; S.sync.lastAt = 0;
   save(true);
-  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
 })();
 fillSettings(); renderUs(); renderFoods(); renderMapChips();
 if(syncReady()){ badge('', '準備同步…'); syncNow(true); }
