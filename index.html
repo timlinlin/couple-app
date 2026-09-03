@@ -519,12 +519,36 @@ function callSync(payload){
     });
   }
   // 不設 Content-Type → 瀏覽器送 text/plain，屬於簡單請求，不會觸發 CORS 預檢
-  return fetch(S.sync.url, { method:'POST', body: JSON.stringify(payload), redirect:'follow' })
-    .then(function(r){ return r.text(); })
-    .then(function(txt){
-      try{ return JSON.parse(txt); }
-      catch(e){ throw new Error('回應不是 JSON，請確認網址是 /exec 結尾、且部署權限選「所有人」'); }
+  function once(){
+    return fetch(S.sync.url, { method:'POST', body: JSON.stringify(payload), redirect:'follow' })
+      .then(function(r){ return r.text(); })
+      .then(function(txt){
+        try{ return JSON.parse(txt); }
+        catch(e){
+          // Apps Script 會把 POST 轉址到 script.googleusercontent.com 取回應，
+          // 那一段偶爾會回 404 的 HTML 錯誤頁（實測回應時間 2～23 秒之間跳動）。
+          // 這是 Google 端的不穩定，不是網址或權限設錯。
+          var e2 = new Error('回應不是 JSON');
+          e2.retryable = txt.indexOf('<!DOCTYPE') === 0 || txt.indexOf('<html') >= 0;
+          throw e2;
+        }
+      });
+  }
+  var tries = 0;
+  function attempt(){
+    tries++;
+    return once().catch(function(err){
+      // 同步是冪等的（每個欄位各自帶 updatedAt、下載靠伺服器 seq），重送不會弄壞資料
+      if(err.retryable && tries < 3){
+        return new Promise(function(res){ setTimeout(res, tries * 1500); }).then(attempt);
+      }
+      if(err.retryable){
+        throw new Error('Google 伺服器暫時沒回應（已重試 ' + tries + ' 次），稍後會自動再試');
+      }
+      throw err;
     });
+  }
+  return attempt();
 }
 
 var syncTimer = null;
