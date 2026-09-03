@@ -10,6 +10,13 @@
 <title>我們的小天地</title>
 <style>
   html,body{margin:0;height:100%;background:#0b090d;overflow:hidden}
+  /* iframe 內部讀不到 env(safe-area-inset-*)，所以由外框頁把安全區讓出來，
+     裡面的底部導覽列才不會壓到 iPhone 的 home indicator */
+  body{
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
   iframe{border:0;width:100%;height:100%;display:block;background:#0b090d}
   #msg{
     color:#9d92a4;text-align:center;padding:64px 26px;
