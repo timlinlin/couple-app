@@ -486,7 +486,9 @@ function load(){
   }catch(e){ return JSON.parse(JSON.stringify(DEF)); }
 }
 function save(quiet){
-  localStorage.setItem(KEY, JSON.stringify(S));
+  // 無痕視窗、第三方 iframe 等情況會讓 localStorage 直接丟例外。
+  // 存不進去不該讓整個 App 停擺——資料還在記憶體裡，雲端也有。
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
   if(!quiet && !applying) queueSync();
 }
 function touch(k, v){ S.couple[k] = v; S.cu[k] = Date.now(); }
@@ -528,10 +530,17 @@ function callSync(payload){
           // Apps Script 會把 POST 轉址到 script.googleusercontent.com 取回應，
           // 那一段偶爾會回 404 的 HTML 錯誤頁（實測回應時間 2～23 秒之間跳動）。
           // 這是 Google 端的不穩定，不是網址或權限設錯。
-          var e2 = new Error('回應不是 JSON');
-          e2.retryable = txt.indexOf('<!DOCTYPE') === 0 || txt.indexOf('<html') >= 0;
+          var e2 = new Error('伺服器回了錯誤頁');
+          e2.retryable = true;
           throw e2;
         }
+      }, function(netErr){
+        // fetch 直接失敗：斷線、逾時、行動網路不穩。
+        // Safari 這裡只會給一句 "Load failed"，看不出原因，所以一律當成可重試。
+        var e3 = new Error('連不到伺服器');
+        e3.retryable = true;
+        e3.detail = String((netErr && netErr.message) || netErr);
+        throw e3;
       });
   }
   var tries = 0;
@@ -539,11 +548,12 @@ function callSync(payload){
     tries++;
     return once().catch(function(err){
       // 同步是冪等的（每個欄位各自帶 updatedAt、下載靠伺服器 seq），重送不會弄壞資料
-      if(err.retryable && tries < 3){
-        return new Promise(function(res){ setTimeout(res, tries * 1500); }).then(attempt);
+      if(err.retryable && tries < 4){
+        return new Promise(function(res){ setTimeout(res, tries * 2000); }).then(attempt);
       }
       if(err.retryable){
-        throw new Error('Google 伺服器暫時沒回應（已重試 ' + tries + ' 次），稍後會自動再試');
+        throw new Error(err.message + '（已重試 ' + tries + ' 次）'
+          + (err.detail ? '：' + err.detail : '') + '。稍後會自動再試一次。');
       }
       throw err;
     });
