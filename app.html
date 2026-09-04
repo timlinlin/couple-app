@@ -201,14 +201,14 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
 .food .stars{margin:8px 0 0; font-size:13px; color:var(--gold); letter-spacing:2px}
 .tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:11px}
 .tag{background:var(--card-3); color:var(--muted); font-size:11.5px; padding:4px 10px; border-radius:99px}
-.acts{display:flex; flex-wrap:nowrap; gap:7px; margin-top:14px;
+.acts{display:flex; flex-wrap:nowrap; gap:6px; margin-top:14px;
   overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch}
 .acts::-webkit-scrollbar{display:none}
 .acts button{flex:0 0 auto}
 .acts button.del{color:var(--muted-2); border-color:var(--line)}
 .acts button{
   border:1px solid var(--line-2); background:var(--card-2); color:var(--fg);
-  padding:9px 13px; border-radius:11px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+  padding:10px 9px; border-radius:11px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;
 }
 .acts button:active{background:var(--card-3)}
 .acts button.p{border-color:rgba(255,111,145,.4); color:var(--accent); background:var(--accent-soft)}
@@ -436,7 +436,7 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
 <div class="scrim" id="scrim" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet">
   <div class="grab"></div>
-  <h3>新增想吃的</h3>
+  <h3 id="sheetTitle">新增想吃的</h3>
   <p class="lead">看到什麼想吃的就先丟進來，之後在地圖上找得到。</p>
 
   <label>店名 / 想吃的東西 *</label>
@@ -457,7 +457,7 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
   <textarea id="f_note" placeholder="要記得訂位 / 只有假日開"></textarea>
   <div class="tools">
     <button class="btn ghost" onclick="closeSheet()">取消</button>
-    <button class="btn" onclick="addFood()">加入清單</button>
+    <button class="btn" id="sheetSave" onclick="addFood()">加入清單</button>
   </div>
 </div>
 
@@ -784,7 +784,29 @@ function addFood(){
   var url = document.getElementById('f_url').value.trim();
   var m = url.match(/https?:\/\/[^\s"'<>]+/);     // 貼整段文字也能抓出網址
   url = m ? m[0] : url;
+  var tags = document.getElementById('f_tags').value
+    .split(/[,，、]/).map(function(x){ return x.trim(); }).filter(Boolean);
   var now = Date.now();
+
+  // 編輯既有項目：只改內容，狀態、評分、誰加的、加入日期都保留
+  if(editingId){
+    var old = findFood(editingId);
+    if(old){
+      old.name  = name;
+      old.area  = document.getElementById('f_area').value.trim();
+      old.url   = url;
+      old.want  = +document.getElementById('f_want').value;
+      old.price = document.getElementById('f_price').value;
+      old.tags  = tags;
+      old.note  = document.getElementById('f_note').value.trim();
+      old.updatedAt = now;                 // 讓同步知道這筆比較新
+      save(); clearForm(); closeSheet();
+      toast('已儲存 ✓');
+      renderFoods(); renderMapChips();
+      return;
+    }
+  }
+
   S.foods.unshift({
     id: 'f'+now+'_'+Math.floor(Math.random()*10000),
     name: name,
@@ -792,7 +814,7 @@ function addFood(){
     url: url,
     want: +document.getElementById('f_want').value,
     price: document.getElementById('f_price').value,
-    tags: document.getElementById('f_tags').value.split(/[,，、]/).map(function(s){ return s.trim(); }).filter(Boolean),
+    tags: tags,
     note: document.getElementById('f_note').value.trim(),
     status:'todo', rating:0, by:S.me, addedAt:now, doneAt:0,
     updatedAt: now, deleted:false
@@ -838,6 +860,7 @@ function renderFoods(){
         (f.status==='done'
           ? '<button onclick="undone(\''+f.id+'\')">放回想吃</button>'
           : '<button onclick="markDone(\''+f.id+'\')">吃過了</button>')+
+        '<button onclick="openSheet(\''+f.id+'\')">編輯</button>'+
         '<button class="del" onclick="del(\''+f.id+'\')">刪除</button>'+
       '</div>'+
       '<p class="by">'+esc(nameOf(f.by||1))+' 加的 · '+fmt(new Date(f.addedAt))+'</p>'+
@@ -976,9 +999,33 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ t.classList.remove('on'); }, 2600);
 }
-function openSheet(){
+var editingId = null;   // 有值代表正在編輯既有項目，null 代表新增
+function openSheet(id){
+  var title = document.getElementById('sheetTitle');
+  var saveBtn = document.getElementById('sheetSave');
+  var f = id ? findFood(id) : null;
+  editingId = f ? id : null;
+
+  if(f){
+    document.getElementById('f_name').value  = f.name || '';
+    document.getElementById('f_area').value  = f.area || '';
+    document.getElementById('f_url').value   = f.url || '';
+    document.getElementById('f_want').value  = String(f.want || 3);
+    document.getElementById('f_price').value = f.price || '';
+    document.getElementById('f_tags').value  = (f.tags || []).join(', ');
+    document.getElementById('f_note').value  = f.note || '';
+    title.textContent = '編輯';
+    saveBtn.textContent = '儲存變更';
+  }else{
+    clearForm();
+    title.textContent = '新增想吃的';
+    saveBtn.textContent = '加入清單';
+  }
+
+  var sheet = document.getElementById('sheet');
   document.getElementById('scrim').classList.add('on');
-  document.getElementById('sheet').classList.add('on');
+  sheet.classList.add('on');
+  sheet.scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
 function closeSheet(){
@@ -987,6 +1034,7 @@ function closeSheet(){
   document.getElementById('scrim').classList.remove('on');
   s.classList.remove('on');
   document.body.style.overflow = '';
+  editingId = null;
 }
 // 分段控制對應到隱藏的 select，這樣清單篩選邏輯完全不用改
 function setStat(el, v){
