@@ -231,7 +231,7 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
 .tabbar{
   position:fixed; left:0; right:0; bottom:0; z-index:40;
   display:flex; padding:8px 8px calc(8px + var(--safe-b));
-  background:rgba(14,11,17,.88);
+  background:#0e0b11;
   backdrop-filter:blur(22px) saturate(1.4); -webkit-backdrop-filter:blur(22px) saturate(1.4);
   border-top:1px solid var(--line);
 }
@@ -412,6 +412,7 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
         <button class="btn danger" onclick="wipe()">清除這台裝置</button>
       </div>
       <input type="file" id="impFile" accept="application/json" style="display:none" onchange="importData(this)">
+      <p class="hint" id="diag" style="margin-top:16px"></p>
     </div>
   </section>
 </main>
@@ -942,6 +943,19 @@ function fillSettings(){
   document.getElementById('who2').textContent = '我是 '+(c.n2||'她');
   document.getElementById('hostedNote').style.display = hosted() ? '' : 'none';
   document.getElementById('manualSync').style.display = hosted() ? 'none' : '';
+  var diag = document.getElementById('diag');
+  if(diag){
+    var cs = getComputedStyle(document.documentElement);
+    var tb = document.querySelector('.tabbar').getBoundingClientRect();
+    diag.textContent =
+      '診斷 v12 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      ' 下' + cs.getPropertyValue('--safe-b').trim() +
+      ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
+      ' · 視窗 ' + window.innerWidth + '×' + window.innerHeight +
+      ' · 導覽列底 ' + Math.round(tb.bottom) +
+      ' · 落差 ' + (window.innerHeight - Math.round(tb.bottom)) +
+      ' · iframe內=' + (window.self !== window.top);
+  }
   document.getElementById('who1').className = S.me===1?'on':'';
   document.getElementById('who2').className = S.me===2?'on':'';
 }
