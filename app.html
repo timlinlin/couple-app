@@ -342,6 +342,7 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
     <select id="fstat" onchange="renderFoods()" style="display:none">
       <option value="todo">想吃的</option><option value="done">吃過了</option><option value="all">全部</option>
     </select>
+    <div id="citybar" class="chips"></div>
     <div id="tagbar" class="chips"></div>
     <div id="foodList"></div>
   </section>
@@ -443,11 +444,13 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
   <label>店名 / 想吃的東西 *</label>
   <input id="f_name" placeholder="例：小巷子燒肉、天母那家舒芙蕾">
   <div class="row">
-    <div><label>地點 / 城市</label><input id="f_area" placeholder="台中 西區"></div>
+    <div><label>縣市</label><select id="f_city"></select></div>
     <div><label>想吃指數</label>
       <select id="f_want"><option value="5">超想吃</option><option value="3" selected>想吃</option><option value="1">有機會再說</option></select>
     </div>
   </div>
+  <label>地點（區、街或地址，選填）</label>
+  <input id="f_area" placeholder="西區 民生路">
   <label>來源連結（可直接貼整段 IG / 小紅書分享文字）</label>
   <input id="f_url" placeholder="貼上後會自動抓出網址">
   <div class="row">
@@ -779,6 +782,41 @@ function draw(img, size, q){
 
 /* ================= 想吃清單 ================= */
 var tagFilter = '';
+var cityFilter = '';
+
+// 由北到南排，篩選列才會照地理順序出現
+var CITIES = ['基隆','台北','新北','桃園','新竹','苗栗','台中','彰化','南投','雲林',
+              '嘉義','台南','高雄','屏東','宜蘭','花蓮','台東','澎湖','金門','馬祖','國外'];
+
+// 「臺」和「台」都要認得，另外容許「台北市」「新北市」這種寫法
+function normCity(t){ return String(t || '').replace(/臺/g, '台'); }
+
+// 從一段文字裡認出縣市。用來把既有資料自動歸類，不必回頭重填。
+function detectCity(text){
+  var t = normCity(text);
+  for(var i = 0; i < CITIES.length; i++){
+    if(t.indexOf(CITIES[i]) >= 0) return CITIES[i];
+  }
+  return '';
+}
+// 優先用使用者明確選的，沒有就從地點和店名推斷
+function cityOf(f){
+  return normCity(f.city) || detectCity((f.area || '') + ' ' + (f.name || ''));
+}
+// 顯示用的地點字串，避免「台中 台中 西區」這種重複
+function placeText(f){
+  var c = cityOf(f), a = f.area || '';
+  if(!c) return a;
+  if(normCity(a).indexOf(c) >= 0) return a;
+  return (c + ' ' + a).trim();
+}
+function fillCityOptions(){
+  var sel = document.getElementById('f_city');
+  if(!sel || sel.options.length) return;
+  var html = '<option value="">未指定</option>';
+  CITIES.forEach(function(c){ html += '<option value="' + c + '">' + c + '</option>'; });
+  sel.innerHTML = html;
+}
 function addFood(){
   var name = document.getElementById('f_name').value.trim();
   if(!name){ toast('至少要有店名或想吃的東西'); return; }
@@ -787,6 +825,12 @@ function addFood(){
   url = m ? m[0] : url;
   var tags = document.getElementById('f_tags').value
     .split(/[,，、]/).map(function(x){ return x.trim(); }).filter(Boolean);
+  // 沒選縣市時，從地點和店名自動推斷，省得每次都要挑
+  var citySel = document.getElementById('f_city');
+  if(!citySel.value){
+    var guess = detectCity(document.getElementById('f_area').value + ' ' + name);
+    if(guess) citySel.value = guess;
+  }
   var now = Date.now();
 
   // 編輯既有項目：只改內容，狀態、評分、誰加的、加入日期都保留
@@ -794,6 +838,7 @@ function addFood(){
     var old = findFood(editingId);
     if(old){
       old.name  = name;
+      old.city  = document.getElementById('f_city').value;
       old.area  = document.getElementById('f_area').value.trim();
       old.url   = url;
       old.want  = +document.getElementById('f_want').value;
@@ -811,6 +856,7 @@ function addFood(){
   S.foods.unshift({
     id: 'f'+now+'_'+Math.floor(Math.random()*10000),
     name: name,
+    city: document.getElementById('f_city').value,
     area: document.getElementById('f_area').value.trim(),
     url: url,
     want: +document.getElementById('f_want').value,
@@ -825,6 +871,7 @@ function addFood(){
 function clearForm(){
   ['f_name','f_area','f_url','f_tags','f_note'].forEach(function(i){ document.getElementById(i).value=''; });
   document.getElementById('f_want').value='3'; document.getElementById('f_price').value='';
+  document.getElementById('f_city').value='';
 }
 function renderFoods(){
   var q = document.getElementById('q').value.trim().toLowerCase();
@@ -832,10 +879,27 @@ function renderFoods(){
   var list = liveFoods().filter(function(f){
     if(st!=='all' && (f.status||'todo')!==st) return false;
     if(tagFilter && (f.tags||[]).indexOf(tagFilter)<0) return false;
-    if(q && [f.name,f.area,(f.tags||[]).join(' ')].join(' ').toLowerCase().indexOf(q)<0) return false;
+    if(cityFilter && cityOf(f)!==cityFilter) return false;
+    if(q && [f.name,f.area,cityOf(f),(f.tags||[]).join(' ')].join(' ').toLowerCase().indexOf(q)<0) return false;
     return true;
   });
   list.sort(function(a,b){ return (b.want-a.want) || (b.addedAt-a.addedAt); });
+
+  // 縣市篩選列：只列出清單裡真的有的縣市，照地理順序，並附上數量。
+  // 只有一個縣市時不顯示，免得佔位置。
+  var counts = {};
+  liveFoods().forEach(function(f){
+    var c = cityOf(f);
+    if(c) counts[c] = (counts[c] || 0) + 1;
+  });
+  var cityList = CITIES.filter(function(c){ return counts[c]; });
+  document.getElementById('citybar').innerHTML = cityList.length > 1
+    ? '<button class="' + (cityFilter ? '' : 'on') + '" onclick="setCity(\'\')">全部地區</button>' +
+      cityList.map(function(c){
+        return '<button class="' + (cityFilter === c ? 'on' : '') + '" onclick="setCity(\'' + jq(c) + '\')">' +
+               esc(c) + ' ' + counts[c] + '</button>';
+      }).join('')
+    : '';
 
   var tags = [];
   liveFoods().forEach(function(f){ (f.tags||[]).forEach(function(t){ if(tags.indexOf(t)<0) tags.push(t); }); });
@@ -846,10 +910,11 @@ function renderFoods(){
 
   document.getElementById('foodList').innerHTML = list.length ? list.map(function(f){
     var fire = f.want===5 ? '超想吃' : (f.want===3 ? '想吃' : '隨緣');
-    var q2 = jq((f.area? f.area+' ':'') + f.name);
+    var place = placeText(f);
+    var q2 = jq((place ? place + ' ' : '') + f.name);
     return '<div class="food '+(f.status==='done'?'done':'')+'">'+
       '<div class="top"><p class="name">'+esc(f.name)+'</p><span class="pill">'+fire+'</span></div>'+
-      '<p class="meta">'+ [f.area?'📍 '+esc(f.area):'', f.price?esc(f.price):'',
+      '<p class="meta">'+ [place?'📍 '+esc(place):'', f.price?esc(f.price):'',
           f.status==='done'? '吃過了 '+(f.doneAt? fmt(new Date(f.doneAt)) : '') : ''].filter(Boolean).join('  ·  ') +'</p>'+
       (f.status==='done' && f.rating ? '<p class="stars">'+'★'.repeat(f.rating)+'☆'.repeat(5-f.rating)+'</p>' : '')+
       (f.note? '<p class="note">'+esc(f.note)+'</p>' : '')+
@@ -870,6 +935,7 @@ function renderFoods(){
   renderStats();
 }
 function setTag(t){ tagFilter = t; renderFoods(); }
+function setCity(c){ cityFilter = c; renderFoods(); }
 function findFood(id){ for(var i=0;i<S.foods.length;i++) if(S.foods[i].id===id) return S.foods[i]; return null; }
 function markDone(id){
   var f = findFood(id); if(!f) return;
@@ -923,7 +989,7 @@ function renderMapChips(){
   var todo = liveFoods().filter(function(f){ return f.status!=='done'; }).slice(0,20);
   document.getElementById('mapChips').innerHTML = todo.length
     ? todo.map(function(f){
-        var q = jq((f.area? f.area+' ':'')+f.name);
+        var q = jq((placeText(f) ? placeText(f) + ' ' : '') + f.name);
         return '<button onclick="document.getElementById(\'mq\').value=\''+q+'\';doMap()">'+esc(f.name)+'</button>';
       }).join('')
     : '<span class="hint">清單裡有店家時，這裡會出現快速定位按鈕</span>';
@@ -948,7 +1014,7 @@ function fillSettings(){
     var cs = getComputedStyle(document.documentElement);
     var tb = document.querySelector('.tabbar').getBoundingClientRect();
     diag.textContent =
-      '診斷 v17 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      '診斷 v18 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
       ' 下' + cs.getPropertyValue('--safe-b').trim() +
       ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
       ' · 外框 ' + (window.__safeInsets && window.__safeInsets.wh ? window.__safeInsets.wh : '?') +
@@ -1026,6 +1092,7 @@ function openSheet(id){
 
   if(f){
     document.getElementById('f_name').value  = f.name || '';
+    document.getElementById('f_city').value  = cityOf(f);
     document.getElementById('f_area').value  = f.area || '';
     document.getElementById('f_url').value   = f.url || '';
     document.getElementById('f_want').value  = String(f.want || 3);
@@ -1134,6 +1201,7 @@ function setStat(el, v){
   S.sync.seq = 0; S.sync.lastAt = 0;
   save(true);
 })();
+fillCityOptions();
 fillSettings(); renderUs(); renderFoods(); renderMapChips();
 if(syncReady()){ badge('', '準備同步…'); syncNow(true); }
 setInterval(function(){ if(syncReady()) syncNow(true); }, 60000);
