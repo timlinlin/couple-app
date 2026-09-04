@@ -119,7 +119,7 @@ section.on{display:block}
   padding:5px 11px; border-radius:99px; font-size:11.5px; font-weight:700; white-space:nowrap}
 
 /* 統計改成三格磚 */
-#stats{display:grid; grid-template-columns:repeat(3,1fr); gap:9px}
+#stats{display:grid; grid-template-columns:repeat(2,1fr); gap:9px}
 #stats .ms{
   flex-direction:column; align-items:flex-start; gap:9px; padding:13px 12px; border-bottom:0;
   background:var(--card-2); border:1px solid var(--line); border-radius:var(--r-sm);
@@ -331,14 +331,14 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
 
   <!-- ============ 想吃清單 ============ -->
   <section id="food">
+    <div class="seg" id="kindSeg">
+      <button class="on" onclick="setKind('food')">吃的</button>
+      <button onclick="setKind('spot')">景點</button>
+    </div>
     <div class="searchbar">
-      <input id="q" placeholder="搜尋店名、地點、標籤" oninput="renderFoods()">
+      <input id="q" placeholder="搜尋名稱、地點、標籤" oninput="renderFoods()">
     </div>
-    <div class="seg" id="statusSeg">
-      <button class="on" onclick="setStat(this,'todo')">想吃的</button>
-      <button onclick="setStat(this,'done')">吃過了</button>
-      <button onclick="setStat(this,'all')">全部</button>
-    </div>
+    <div class="seg" id="statusSeg"></div>
     <select id="fstat" onchange="renderFoods()" style="display:none">
       <option value="todo">想吃的</option><option value="done">吃過了</option><option value="all">全部</option>
     </select>
@@ -426,7 +426,7 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
     <span>我們</span></button>
   <button data-t="food">
     <svg viewBox="0 0 24 24"><path d="M6 3v8a2.5 2.5 0 0 0 5 0V3M8.5 11v10"/><path d="M17.5 3c-1.4 1.2-2 3.2-2 5.5 0 1.6.7 2.6 2 2.9V21"/></svg>
-    <span>想吃清單</span></button>
+    <span>清單</span></button>
   <button data-t="map">
     <svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.4-6.5-10a6.5 6.5 0 0 1 13 0c0 4.6-6.5 10-6.5 10z"/><circle cx="12" cy="11" r="2.4"/></svg>
     <span>地圖</span></button>
@@ -439,24 +439,28 @@ button.danger{background:none; color:var(--err); border:1px solid rgba(255,122,1
 <div class="sheet" id="sheet">
   <div class="grab"></div>
   <h3 id="sheetTitle">新增想吃的</h3>
-  <p class="lead">看到什麼想吃的就先丟進來，之後在地圖上找得到。</p>
+  <p class="lead" id="sheetLead">看到什麼想吃的就先丟進來，之後在地圖上找得到。</p>
 
-  <label>店名 / 想吃的東西 *</label>
-  <input id="f_name" placeholder="例：小巷子燒肉、天母那家舒芙蕾">
   <div class="row">
-    <div><label>縣市</label><select id="f_city"></select></div>
-    <div><label>想吃指數</label>
-      <select id="f_want"><option value="5">超想吃</option><option value="3" selected>想吃</option><option value="1">有機會再說</option></select>
+    <div><label>類型</label>
+      <select id="f_kind" onchange="onKindChange()">
+        <option value="food">吃的</option><option value="spot">景點</option>
+      </select>
     </div>
+    <div><label>縣市</label><select id="f_city"></select></div>
   </div>
+  <label id="lbl_name">店名 / 想吃的東西 *</label>
+  <input id="f_name" placeholder="例：小巷子燒肉、天母那家舒芙蕾">
   <label>地點（區、街或地址，選填）</label>
   <input id="f_area" placeholder="西區 民生路">
-  <label>來源連結（可直接貼整段 IG / 小紅書分享文字）</label>
-  <input id="f_url" placeholder="貼上後會自動抓出網址">
   <div class="row">
-    <div><label>標籤（逗號分隔）</label><input id="f_tags" placeholder="日式, 約會"></div>
+    <div><label id="lbl_want">想吃指數</label><select id="f_want"></select></div>
     <div><label>價位</label><select id="f_price"><option value="">—</option><option>$</option><option>$$</option><option>$$$</option></select></div>
   </div>
+  <label>來源連結（可直接貼整段 IG / 小紅書分享文字）</label>
+  <input id="f_url" placeholder="貼上後會自動抓出網址">
+  <label>標籤（逗號分隔）</label>
+  <input id="f_tags" placeholder="日式, 約會">
   <label>備註</label>
   <textarea id="f_note" placeholder="要記得訂位 / 只有假日開"></textarea>
   <div class="tools">
@@ -738,11 +742,14 @@ function renderMilestones(){
 function renderStats(){
   var live = liveFoods();
   var done = live.filter(function(f){ return f.status==='done'; });
+  var todoFood = live.filter(function(f){ return f.status!=='done' && kindOf(f)==='food'; }).length;
+  var todoSpot = live.filter(function(f){ return f.status!=='done' && kindOf(f)==='spot'; }).length;
   var rated = done.filter(function(f){ return f.rating>0; });
   var avg = rated.length ? (rated.reduce(function(a,b){ return a+b.rating; },0)/rated.length).toFixed(1) : '—';
   document.getElementById('stats').innerHTML =
-    '<div class="ms"><div>想吃的口袋名單</div><span class="pill">'+(live.length-done.length)+' 家</span></div>'+
-    '<div class="ms"><div>一起吃過的</div><span class="pill">'+done.length+' 家</span></div>'+
+    '<div class="ms"><div>想吃的</div><span class="pill">'+todoFood+' 家</span></div>'+
+    '<div class="ms"><div>想去的</div><span class="pill">'+todoSpot+' 個</span></div>'+
+    '<div class="ms"><div>一起完成</div><span class="pill">'+done.length+'</span></div>'+
     '<div class="ms"><div>平均評分</div><span class="pill">'+avg+' / 5</span></div>';
 }
 function pickAvatar(which){
@@ -780,9 +787,29 @@ function draw(img, size, q){
   return cv.toDataURL('image/jpeg', q);
 }
 
-/* ================= 想吃清單 ================= */
+/* ================= 清單（吃的 / 景點）================= */
+// 兩種類型只有用語不同，資料結構完全共用
+var KINDS = {
+  food: {
+    label:'吃的', todo:'想吃的', done:'吃過了', undo:'放回想吃',
+    want:['超想吃','想吃','有機會再說'], wantLabel:'想吃指數',
+    nameLabel:'店名 / 想吃的東西 *', namePh:'例：小巷子燒肉、天母那家舒芙蕾',
+    addTitle:'新增想吃的', lead:'看到什麼想吃的就先丟進來，之後在地圖上找得到。',
+    empty:'還沒有想吃的，用右下角的 ＋ 加第一家吧'
+  },
+  spot: {
+    label:'景點', todo:'想去的', done:'去過了', undo:'放回想去',
+    want:['超想去','想去','有機會再說'], wantLabel:'想去指數',
+    nameLabel:'景點名稱 *', namePh:'例：象山步道、審計新村',
+    addTitle:'新增想去的', lead:'看到想去的地方就先記下來，之後在地圖上找得到。',
+    empty:'還沒有想去的地方，用右下角的 ＋ 加第一個吧'
+  }
+};
+function kindOf(f){ return (f && f.kind === 'spot') ? 'spot' : 'food'; }   // 舊資料一律當「吃的」
+
 var tagFilter = '';
 var cityFilter = '';
+var kindFilter = 'food';
 
 // 由北到南排，篩選列才會照地理順序出現
 var CITIES = ['基隆','台北','新北','桃園','新竹','苗栗','台中','彰化','南投','雲林',
@@ -838,6 +865,7 @@ function addFood(){
     var old = findFood(editingId);
     if(old){
       old.name  = name;
+      old.kind  = document.getElementById('f_kind').value;
       old.city  = document.getElementById('f_city').value;
       old.area  = document.getElementById('f_area').value.trim();
       old.url   = url;
@@ -856,6 +884,7 @@ function addFood(){
   S.foods.unshift({
     id: 'f'+now+'_'+Math.floor(Math.random()*10000),
     name: name,
+    kind: document.getElementById('f_kind').value,
     city: document.getElementById('f_city').value,
     area: document.getElementById('f_area').value.trim(),
     url: url,
@@ -866,7 +895,10 @@ function addFood(){
     status:'todo', rating:0, by:S.me, addedAt:now, doneAt:0,
     updatedAt: now, deleted:false
   });
-  save(); clearForm(); closeSheet(); toast('已加入清單 ✓'); renderFoods();
+  save(); clearForm(); closeSheet(); toast('已加入清單 ✓');
+  // 加完如果屬於另一個類型，就切過去，不然使用者會以為東西不見了
+  if(S.foods[0] && kindOf(S.foods[0]) !== kindFilter) setKind(kindOf(S.foods[0]));
+  else renderFoods();
 }
 function clearForm(){
   ['f_name','f_area','f_url','f_tags','f_note'].forEach(function(i){ document.getElementById(i).value=''; });
@@ -877,6 +909,7 @@ function renderFoods(){
   var q = document.getElementById('q').value.trim().toLowerCase();
   var st = document.getElementById('fstat').value;
   var list = liveFoods().filter(function(f){
+    if(kindOf(f) !== kindFilter) return false;
     if(st!=='all' && (f.status||'todo')!==st) return false;
     if(tagFilter && (f.tags||[]).indexOf(tagFilter)<0) return false;
     if(cityFilter && cityOf(f)!==cityFilter) return false;
@@ -887,8 +920,9 @@ function renderFoods(){
 
   // 縣市篩選列：只列出清單裡真的有的縣市，照地理順序，並附上數量。
   // 只有一個縣市時不顯示，免得佔位置。
+  var ofKind = liveFoods().filter(function(f){ return kindOf(f) === kindFilter; });
   var counts = {};
-  liveFoods().forEach(function(f){
+  ofKind.forEach(function(f){
     var c = cityOf(f);
     if(c) counts[c] = (counts[c] || 0) + 1;
   });
@@ -902,20 +936,21 @@ function renderFoods(){
     : '';
 
   var tags = [];
-  liveFoods().forEach(function(f){ (f.tags||[]).forEach(function(t){ if(tags.indexOf(t)<0) tags.push(t); }); });
+  ofKind.forEach(function(f){ (f.tags||[]).forEach(function(t){ if(tags.indexOf(t)<0) tags.push(t); }); });
   document.getElementById('tagbar').innerHTML = tags.length
     ? '<button class="'+(tagFilter?'':'on')+'" onclick="setTag(\'\')">全部</button>' +
       tags.map(function(t){ return '<button class="'+(tagFilter===t?'on':'')+'" onclick="setTag(\''+jq(t)+'\')">'+esc(t)+'</button>'; }).join('')
     : '';
 
   document.getElementById('foodList').innerHTML = list.length ? list.map(function(f){
-    var fire = f.want===5 ? '超想吃' : (f.want===3 ? '想吃' : '隨緣');
+    var K = KINDS[kindOf(f)];
+    var fire = f.want===5 ? K.want[0] : (f.want===3 ? K.want[1] : '隨緣');
     var place = placeText(f);
     var q2 = jq((place ? place + ' ' : '') + f.name);
     return '<div class="food '+(f.status==='done'?'done':'')+'">'+
       '<div class="top"><p class="name">'+esc(f.name)+'</p><span class="pill">'+fire+'</span></div>'+
       '<p class="meta">'+ [place?'📍 '+esc(place):'', f.price?esc(f.price):'',
-          f.status==='done'? '吃過了 '+(f.doneAt? fmt(new Date(f.doneAt)) : '') : ''].filter(Boolean).join('  ·  ') +'</p>'+
+          f.status==='done'? K.done+' '+(f.doneAt? fmt(new Date(f.doneAt)) : '') : ''].filter(Boolean).join('  ·  ') +'</p>'+
       (f.status==='done' && f.rating ? '<p class="stars">'+'★'.repeat(f.rating)+'☆'.repeat(5-f.rating)+'</p>' : '')+
       (f.note? '<p class="note">'+esc(f.note)+'</p>' : '')+
       ((f.tags||[]).length? '<div class="tags">'+f.tags.map(function(t){ return '<span class="tag">#'+esc(t)+'</span>'; }).join('')+'</div>' : '')+
@@ -924,18 +959,56 @@ function renderFoods(){
         '<button onclick="openMaps(\''+q2+'\')">導航</button>'+
         (f.url? '<button onclick="window.open(\''+jq(f.url)+'\',\'_blank\')">原文</button>' : '')+
         (f.status==='done'
-          ? '<button onclick="undone(\''+f.id+'\')">放回想吃</button>'
-          : '<button onclick="markDone(\''+f.id+'\')">吃過了</button>')+
+          ? '<button onclick="undone(\''+f.id+'\')">'+K.undo+'</button>'
+          : '<button onclick="markDone(\''+f.id+'\')">'+K.done+'</button>')+
         '<button onclick="openSheet(\''+f.id+'\')">編輯</button>'+
         '<button class="del" onclick="del(\''+f.id+'\')">刪除</button>'+
       '</div>'+
       '<p class="by">'+esc(nameOf(f.by||1))+' 加的 · '+fmt(new Date(f.addedAt))+'</p>'+
       '</div>';
-  }).join('') : '<div class="empty">'+(liveFoods().length? '沒有符合的項目 🔍':'還沒有東西，用上面的表單加第一家吧 🍰')+'</div>';
+  }).join('') : '<div class="empty">'+(ofKind.length? '沒有符合的項目':esc(KINDS[kindFilter].empty))+'</div>';
   renderStats();
 }
 function setTag(t){ tagFilter = t; renderFoods(); }
 function setCity(c){ cityFilter = c; renderFoods(); }
+function setKind(k){
+  kindFilter = k;
+  // 換類型時把篩選條件全部歸位，不然容易出現「切過去卻是空白」的困惑
+  tagFilter = ''; cityFilter = '';
+  document.getElementById('fstat').value = 'todo';
+  var kids = document.getElementById('kindSeg').children;
+  for(var i=0;i<kids.length;i++) kids[i].classList.toggle('on', i === (k === 'spot' ? 1 : 0));
+  renderStatusSeg();
+  renderFoods();
+}
+// 狀態列的字要跟著類型走（想吃的/吃過了 ↔ 想去的/去過了）
+function renderStatusSeg(){
+  var K = KINDS[kindFilter];
+  var cur = document.getElementById('fstat').value;
+  var opts = [['todo',K.todo],['done',K.done],['all','全部']];
+  document.getElementById('statusSeg').innerHTML = opts.map(function(o){
+    return '<button class="' + (cur === o[0] ? 'on' : '') + '" onclick="setStat(this,\'' + o[0] + '\')">' +
+           esc(o[1]) + '</button>';
+  }).join('');
+}
+// 表單裡切換類型時，跟著換用語
+function onKindChange(){
+  var k = document.getElementById('f_kind').value;
+  var K = KINDS[k] || KINDS.food;
+  var w = document.getElementById('f_want');
+  var keep = w.value || '3';
+  w.innerHTML = '<option value="5">' + esc(K.want[0]) + '</option>' +
+                '<option value="3">' + esc(K.want[1]) + '</option>' +
+                '<option value="1">' + esc(K.want[2]) + '</option>';
+  w.value = keep;
+  document.getElementById('lbl_want').textContent = K.wantLabel;
+  document.getElementById('lbl_name').textContent = K.nameLabel;
+  document.getElementById('f_name').placeholder = K.namePh;
+  if(!editingId){
+    document.getElementById('sheetTitle').textContent = K.addTitle;
+    document.getElementById('sheetLead').textContent = K.lead;
+  }
+}
 function findFood(id){ for(var i=0;i<S.foods.length;i++) if(S.foods[i].id===id) return S.foods[i]; return null; }
 function markDone(id){
   var f = findFood(id); if(!f) return;
@@ -1014,7 +1087,7 @@ function fillSettings(){
     var cs = getComputedStyle(document.documentElement);
     var tb = document.querySelector('.tabbar').getBoundingClientRect();
     diag.textContent =
-      '診斷 v18 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      '診斷 v19 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
       ' 下' + cs.getPropertyValue('--safe-b').trim() +
       ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
       ' · 外框 ' + (window.__safeInsets && window.__safeInsets.wh ? window.__safeInsets.wh : '?') +
@@ -1090,6 +1163,11 @@ function openSheet(id){
   var f = id ? findFood(id) : null;
   editingId = f ? id : null;
 
+  // 先決定類型：編輯時跟著該筆，新增時跟著目前在看的分類。
+  // onKindChange() 會依類型重建「想吃/想去指數」的選項，所以要在填值之前呼叫。
+  document.getElementById('f_kind').value = f ? kindOf(f) : kindFilter;
+  onKindChange();
+
   if(f){
     document.getElementById('f_name').value  = f.name || '';
     document.getElementById('f_city').value  = cityOf(f);
@@ -1100,10 +1178,11 @@ function openSheet(id){
     document.getElementById('f_tags').value  = (f.tags || []).join(', ');
     document.getElementById('f_note').value  = f.note || '';
     title.textContent = '編輯';
+    document.getElementById('sheetLead').textContent = '改完按「儲存變更」，另一台裝置也會同步更新。';
     saveBtn.textContent = '儲存變更';
   }else{
     clearForm();
-    title.textContent = '新增想吃的';
+    onKindChange();          // clearForm 會重設欄位，這裡再套一次類型用語
     saveBtn.textContent = '加入清單';
   }
 
@@ -1202,6 +1281,8 @@ function setStat(el, v){
   save(true);
 })();
 fillCityOptions();
+onKindChange();
+renderStatusSeg();
 fillSettings(); renderUs(); renderFoods(); renderMapChips();
 if(syncReady()){ badge('', '準備同步…'); syncNow(true); }
 setInterval(function(){ if(syncReady()) syncNow(true); }, 60000);
