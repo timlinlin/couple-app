@@ -948,7 +948,7 @@ function fillSettings(){
     var cs = getComputedStyle(document.documentElement);
     var tb = document.querySelector('.tabbar').getBoundingClientRect();
     diag.textContent =
-      '診斷 v16 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      '診斷 v17 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
       ' 下' + cs.getPropertyValue('--safe-b').trim() +
       ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
       ' · 外框 ' + (window.__safeInsets && window.__safeInsets.wh ? window.__safeInsets.wh : '?') +
@@ -1090,11 +1090,19 @@ function setStat(el, v){
   //   * 在 Safari 裡開 → 底部工具列會蓋住一截，量到多少就補多少，
   //     導覽列的文字才不會被切掉。
   function bottomInset(){
-    var base = si.b > 0 ? si.b : 0;
+    var cands = [ si.b > 0 ? si.b : 0 ];
+
+    // 主要依據：外框頁自己量到的可見視窗高（wh）如果比這個 frame 矮，
+    // 差額就是被瀏覽器工具列蓋住的部分。實測 Safari 下 739-711=28。
+    // 獨立模式（加到主畫面）兩者相等 → 0，導覽列剛好貼底。
+    if(si.wh > 0) cands.push(Math.max(0, window.innerHeight - si.wh));
+
+    // 備援：visualViewport。在 iframe 內通常回報整個 frame 高度而量不到遮蔽，
+    // 但在某些瀏覽器有效，取最大值不會有壞處。
     var vv = window.visualViewport;
-    var hidden = 0;
-    if(vv) hidden = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-    return Math.max(base, hidden);
+    if(vv) cands.push(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+
+    return Math.max.apply(null, cands);
   }
   function applyBottom(){ st.setProperty('--safe-b', bottomInset() + 'px'); }
   applyBottom();
