@@ -948,7 +948,7 @@ function fillSettings(){
     var cs = getComputedStyle(document.documentElement);
     var tb = document.querySelector('.tabbar').getBoundingClientRect();
     diag.textContent =
-      '診斷 v14 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      '診斷 v15 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
       ' 下' + cs.getPropertyValue('--safe-b').trim() +
       ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
       ' · 外框 ' + (window.__safeInsets && window.__safeInsets.wh ? window.__safeInsets.wh : '?') +
@@ -1070,11 +1070,21 @@ function setStat(el, v){
 //    外框頁若已經被 iOS 放進安全區內（量到 0），App 再加一次就會變成重複計算，
 //    畫面上下就會多出用不到的黑邊。只有外框頁知道自己跟螢幕的真實關係。
 (function(){
-  if(window.self === window.top) return;
-  var si = window.__safeInsets || { t: 0, b: 0 };
+  if(window.self === window.top) return;   // 直接開這一頁時，CSS 的 env() 就是對的
+
+  var si = window.__safeInsets || {};
   var st = document.documentElement.style;
-  st.setProperty('--safe-t', (si.t || 0) + 'px');
-  st.setProperty('--safe-b', (si.b || 0) + 'px');
+
+  // 上緣：這個 frame 的頂端會被 iOS 狀態列／動態島蓋住，需要留白。
+  // 外框頁若有量到有效值就以它為準；量到 0（常見於量測時機太早）就沿用
+  // CSS 裡的 env()，在 iPhone 上會是 59px，實測正確。
+  if(si.t > 0) st.setProperty('--safe-t', si.t + 'px');
+
+  // 下緣：一律歸零。實測這個 frame 的底部已經停在 home indicator 上方了，
+  // 再依 env() 讓一次 34px 就會多出一條用不到的空白（使用者回報的「下面黑邊」）。
+  // WebKit 在 iframe 內的 env() 回報的是「整台裝置」的安全區，不是這個 frame 的，
+  // 所以這裡不能相信它。
+  st.setProperty('--safe-b', '0px');
 })();
 
 (function(){
