@@ -948,9 +948,11 @@ function fillSettings(){
     var cs = getComputedStyle(document.documentElement);
     var tb = document.querySelector('.tabbar').getBoundingClientRect();
     diag.textContent =
-      '診斷 v13 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      '診斷 v14 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
       ' 下' + cs.getPropertyValue('--safe-b').trim() +
       ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
+      ' · 外框 ' + (window.__safeInsets && window.__safeInsets.wh ? window.__safeInsets.wh : '?') +
+      '/螢幕 ' + (window.__safeInsets && window.__safeInsets.sh ? window.__safeInsets.sh : '?') +
       ' · 視窗 ' + window.innerWidth + '×' + window.innerHeight +
       ' · 導覽列底 ' + Math.round(tb.bottom) +
       ' · 落差 ' + (window.innerHeight - Math.round(tb.bottom)) +

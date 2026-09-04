@@ -112,13 +112,28 @@ function safeInsets(){
   return { t: t, b: b };
 }
 
+// iOS 剛載入時 env(safe-area-inset-*) 還沒算出來，太早量會拿到 0。
+// 等 load 完成再多等一下才量，並且加上保險時限避免卡住。
+function whenSettled(cb){
+  var fired = false;
+  function go(){ if(fired) return; fired = true; cb(); }
+  if(document.readyState === 'complete'){ setTimeout(go, 150); }
+  else { window.addEventListener('load', function(){ setTimeout(go, 150); }); }
+  setTimeout(go, 1500);
+}
+
 function boot(u){
   remember(u);
+  whenSettled(function(){ mount(u); });
+}
+
+function mount(u){
   var ins = safeInsets();
   var f = document.createElement('iframe');
   // 用查詢參數而非 hash：GAS 會再開一層內部 iframe 跑 App，hash 傳不進去，
   // 查詢參數則會進到 doGet(e).parameter，由後端注入頁面。
-  f.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + 'st=' + ins.t + '&sb=' + ins.b;
+  f.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + 'st=' + ins.t + '&sb=' + ins.b +
+          '&wh=' + window.innerHeight + '&sh=' + (window.screen ? window.screen.height : 0);
   f.allow = 'geolocation';
   f.onload = function(){
     var l = document.getElementById('loading');
