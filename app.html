@@ -948,12 +948,14 @@ function fillSettings(){
     var cs = getComputedStyle(document.documentElement);
     var tb = document.querySelector('.tabbar').getBoundingClientRect();
     diag.textContent =
-      '診斷 v15 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
+      '診斷 v16 · 安全區 上' + cs.getPropertyValue('--safe-t').trim() +
       ' 下' + cs.getPropertyValue('--safe-b').trim() +
       ' · 注入=' + (window.__safeInsets ? window.__safeInsets.t + '/' + window.__safeInsets.b : '無') +
       ' · 外框 ' + (window.__safeInsets && window.__safeInsets.wh ? window.__safeInsets.wh : '?') +
       '/螢幕 ' + (window.__safeInsets && window.__safeInsets.sh ? window.__safeInsets.sh : '?') +
       ' · 視窗 ' + window.innerWidth + '×' + window.innerHeight +
+      ' · vv ' + (window.visualViewport ? Math.round(window.visualViewport.height) + '+' +
+                   Math.round(window.visualViewport.offsetTop) : '無') +
       ' · 導覽列底 ' + Math.round(tb.bottom) +
       ' · 落差 ' + (window.innerHeight - Math.round(tb.bottom)) +
       ' · iframe內=' + (window.self !== window.top);
@@ -1080,11 +1082,27 @@ function setStat(el, v){
   // CSS 裡的 env()，在 iPhone 上會是 59px，實測正確。
   if(si.t > 0) st.setProperty('--safe-t', si.t + 'px');
 
-  // 下緣：一律歸零。實測這個 frame 的底部已經停在 home indicator 上方了，
-  // 再依 env() 讓一次 34px 就會多出一條用不到的空白（使用者回報的「下面黑邊」）。
-  // WebKit 在 iframe 內的 env() 回報的是「整台裝置」的安全區，不是這個 frame 的，
-  // 所以這裡不能相信它。
-  st.setProperty('--safe-b', '0px');
+  // 下緣：不能用 env()。WebKit 在 iframe 內回報的是「整台裝置」的安全區，
+  // 不是這個 frame 的，照抄會多出一條用不到的空白（使用者回報的「下面黑邊」）。
+  //
+  // 改成量「版面視窗有多少被瀏覽器介面蓋住」：
+  //   * 加到主畫面的獨立模式 → 沒有工具列，量到 0，導覽列剛好貼底。
+  //   * 在 Safari 裡開 → 底部工具列會蓋住一截，量到多少就補多少，
+  //     導覽列的文字才不會被切掉。
+  function bottomInset(){
+    var base = si.b > 0 ? si.b : 0;
+    var vv = window.visualViewport;
+    var hidden = 0;
+    if(vv) hidden = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    return Math.max(base, hidden);
+  }
+  function applyBottom(){ st.setProperty('--safe-b', bottomInset() + 'px'); }
+  applyBottom();
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', applyBottom);
+    window.visualViewport.addEventListener('scroll', applyBottom);
+  }
+  window.addEventListener('orientationchange', function(){ setTimeout(applyBottom, 300); });
 })();
 
 (function(){
